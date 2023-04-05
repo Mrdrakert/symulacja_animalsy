@@ -6,8 +6,18 @@ import math
 # Set up the screen
 pygame.init()
 WIDTH, HEIGHT = 800, 600
+LEFF_MENU_WIDTH = 180
+BOTTOM_MENU_HEIGHT = 100
+SIM_LEFT, SIM_UP, SIM_RIGHT, SIM_DOWN = LEFF_MENU_WIDTH, 0, WIDTH, HEIGHT - BOTTOM_MENU_HEIGHT
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
+left_menu = screen.subsurface(pygame.Rect(0,0,LEFF_MENU_WIDTH, HEIGHT))
+bottom_menu = screen.subsurface(pygame.Rect(LEFF_MENU_WIDTH, HEIGHT - BOTTOM_MENU_HEIGHT, WIDTH - LEFF_MENU_WIDTH, BOTTOM_MENU_HEIGHT))
+simulation = screen.subsurface(pygame.Rect(SIM_LEFT,SIM_UP,SIM_RIGHT - SIM_LEFT, SIM_DOWN - SIM_UP))
 pygame.display.set_caption("Animal Simulation")
+
+scale = 1.0
+scale_dif = 0.1
+offsetx, offsety = 0, 0
 
 
 BLACK = (0, 0, 0)
@@ -17,6 +27,9 @@ RED = (255, 0, 0)
 YELLOW = (255, 255, 0)
 GREY = (128, 128, 128)
 ORANGE = (255, 165, 0)
+DARKGRAY = (64,64,64)
+DARKGREEN = (0, 102, 51)
+LIGHTGRAY = (198, 198, 198)
 
 # Set up animals
 RABBIT_SIZE = 10
@@ -167,7 +180,8 @@ class Rabbit:
         self.eaten = True
 
     def draw(self, screen):
-        pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size)
+        if int((self.x + offsetx) * scale) > 0 and int((self.y + offsety) * scale) > 0:
+            pygame.draw.circle(screen, self.color, (int((self.x + offsetx)* scale), int((self.y + offsety) * scale)), self.size * scale)
     
     
 
@@ -254,7 +268,8 @@ class Fox:
         self.eaten = True
 
     def draw(self, screen):
-        pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size)
+        if int((self.x + offsetx) * scale) > 0 and int((self.y + offsety) * scale) > 0:
+            pygame.draw.circle(screen, self.color, (int((self.x + offsetx)* scale), int((self.y + offsety)* scale)), self.size * scale)
 
     def reproduce(self):
         if self.reproduce:
@@ -270,7 +285,8 @@ class Grass:
         self.color = GREEN
 
     def draw(self, screen):
-        pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size)
+        if int((self.x + offsetx) * scale) > 0 and int((self.y + offsety) * scale) > 0:
+            pygame.draw.circle(screen, self.color, (int((self.x + offsetx) * scale), int((self.y + offsety) * scale)), self.size * scale)
 
 
 # Create animals
@@ -293,27 +309,55 @@ for i in range(GRASS_NUMBER):
 # Set up game loop
 running = True
 clock = pygame.time.Clock()
+sim_pressed = False
 
 while running:
     # Handle events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Check for left mouse button click
+            # Check if mouse click is within the bounds of the surface
+            mouse_x, mouse_y = event.pos
+            # Check if mouse click is within the bounds of the surface
+            if SIM_LEFT <= mouse_x <= SIM_RIGHT and SIM_UP <= mouse_y <= SIM_DOWN:
+                sim_pressed = True
+                prev_mouse_x = mouse_x
+                prev_mouse_y = mouse_y
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:  # Check for left mouse button release
+            sim_pressed = False
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 4: #scroll up
+            mouse_x, mouse_y = event.pos
+            if SIM_LEFT <= mouse_x <= SIM_RIGHT and SIM_UP <= mouse_y <= SIM_DOWN:
+                scale = scale + scale_dif
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 5: #scroll down
+            mouse_x, mouse_y = event.pos
+            if SIM_LEFT <= mouse_x <= SIM_RIGHT and SIM_UP <= mouse_y <= SIM_DOWN:
+                scale = scale - scale_dif
+    if sim_pressed:
+        mouse_x, mouse_y = event.pos
+        offsetx = offsetx - prev_mouse_x + mouse_x
+        offsety = offsety - prev_mouse_y + mouse_y
+        prev_mouse_x = mouse_x
+        prev_mouse_y = mouse_y
 
     # Clear the screen
-    screen.fill(WHITE)
-
+    simulation.fill(LIGHTGRAY)
     # Move animals
     for rabbit in rabbits:
         rabbit.move(grass, foxes, rabbits)
-        rabbit.draw(screen)
+        rabbit.draw(simulation)
 
     for fox in foxes:
         fox.move(rabbits, foxes)
-        fox.draw(screen)
+        fox.draw(simulation)
 
     for g in grass:
-        g.draw(screen)
+        g.draw(simulation)
+
+    #menus
+    left_menu.fill(GREY)
+    bottom_menu.fill(DARKGRAY)
 
     # Update the screen
     pygame.display.flip()
