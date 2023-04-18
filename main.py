@@ -1,9 +1,13 @@
 import pygame
 import random
 import math
+from threading import Thread
+from threading import Lock
 from Fox import Fox
 from Rabbit import Rabbit
 from Grass import Grass
+from Grasses import Grasses
+import os
 
 
 # Set up the screen
@@ -21,6 +25,15 @@ pygame.display.set_caption("Animal Simulation")
 scale = 0.7
 scale_dif = 0.1
 offsetx, offsety = 50, 50
+
+grassimg = pygame.image.load(os.path.join("grass.png"))
+grassimg.convert()
+
+foximg = pygame.image.load(os.path.join("fox.png"))
+foximg.convert()
+
+rabbitimg = pygame.image.load(os.path.join("rabbit.png"))
+rabbitimg.convert()
 
 
 BLACK = (0, 0, 0)
@@ -50,23 +63,31 @@ FOX_SPEED = 1.3
 
 rabbits = []
 foxes = []
-grass = []
+
+rabbit_lock = Lock()
+fox_lock = Lock()
+grass_lock = Lock()
+
+grasses = Grasses()
+
+Thread(target = grasses.live, args = (WIDTH, HEIGHT, grassimg)).start()
 
 # Create animals
 for i in range(RABBIT_NUMBER):
     x = random.randrange(RABBIT_SIZE, WIDTH - RABBIT_SIZE)
     y = random.randrange(RABBIT_SIZE, HEIGHT - RABBIT_SIZE)
-    rabbits.append(Rabbit(x, y, WIDTH, HEIGHT, GREY))
+    rabbit = Rabbit(x, y, WIDTH, HEIGHT, rabbitimg)
+    rabbits.append(rabbit)
+    Thread(target = rabbit.live, args = (grasses.grass_list, foxes, rabbits, rabbit_lock, grass_lock)).start()
 
 for i in range(FOX_NUMBER):
     x = random.randrange(FOX_SIZE, WIDTH - FOX_SIZE)
     y = random.randrange(FOX_SIZE, HEIGHT - FOX_SIZE)
-    foxes.append(Fox(x, y, WIDTH, HEIGHT, ORANGE))
+    fox = Fox(x, y, WIDTH, HEIGHT, foximg)
+    foxes.append(fox)
+    Thread(target = fox.live, args = (foxes, rabbits, fox_lock)).start()
 
-for i in range(GRASS_NUMBER):
-    x = random.randrange(GRASS_SIZE, WIDTH - GRASS_SIZE)
-    y = random.randrange(GRASS_SIZE, HEIGHT - GRASS_SIZE)
-    grass.append(Grass(x, y, WIDTH, HEIGHT, GREEN))
+
 
 
 # Set up game loop
@@ -108,16 +129,23 @@ while running:
     simulation.fill(LIGHTGRAY)
     pygame.draw.rect(simulation, DARKGREEN, pygame.Rect(int(offsetx * scale), int(offsety * scale), int(WIDTH * scale), int(HEIGHT * scale)))
     # Move animals
+
+    for gej in grasses.grass_list:
+        gej.draw(simulation, offsetx, offsety, scale)
+
     for rabbit in rabbits:
-        rabbit.move(grass, foxes, rabbits)
-        rabbit.draw(simulation, offsetx, offsety, scale)
+        if rabbit.alive() == False:
+            rabbits.remove(rabbit)
+        else:
+            rabbit.draw(simulation, offsetx, offsety, scale)
 
     for fox in foxes:
-        fox.move(rabbits, foxes)
-        fox.draw(simulation, offsetx, offsety, scale)
+        if fox.alive() == False:
+            foxes.remove(fox)
+        else:
+            fox.draw(simulation, offsetx, offsety, scale)
 
-    for gej in grass:
-        gej.draw(simulation, offsetx, offsety, scale)
+    
 
     #menus
     left_menu.fill(GREY)
@@ -129,5 +157,10 @@ while running:
     # Wait for the next frame
     clock.tick(60)
 
-# Clean up
+grasses.done = True
+for rabbit in rabbits:
+    rabbit.done = True
+for fox in foxes:
+    fox.done = True
+
 pygame.quit()

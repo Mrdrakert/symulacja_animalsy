@@ -1,6 +1,7 @@
 import random
 import math
 import pygame
+from threading import Thread
 
 RABBIT_SIZE = 10
 RABBIT_NUMBER = 50
@@ -16,6 +17,7 @@ class Rabbit:
         self.speed = RABBIT_SPEED
         self.color = color
         self.eaten = False
+        self.done = False
 
         self.map_width = map_width
         self.map_height = map_height
@@ -30,17 +32,19 @@ class Rabbit:
         self.reproductive_cooldown = 600
         self.reproductive_timer = 0
 
-    def reproduce(self, nearest_rabbit, rabbits):
+    def reproduce(self, nearest_rabbit, rabbits, grass, foxes, rabbit_lock, grass_lock):
         if (self.reproductive_timer <= 0 and nearest_rabbit.reproductive_timer <= 0):
             new_rabbit = Rabbit(self.x, self.y, self.map_width, self.map_height, self.color)
             new_rabbit.reproductive_timer = new_rabbit.reproductive_cooldown
             rabbits.append(new_rabbit)
+            Thread(target = new_rabbit.live, args = (grass, foxes, rabbits, rabbit_lock, grass_lock)).start()
             nearest_rabbit.reproductive_timer = nearest_rabbit.reproductive_cooldown
             self.reproductive_timer = self.reproductive_cooldown
 
-    def move(self, grass, foxes, rabbits):
+    def move(self, grass, foxes, rabbits, rabbit_lock, grass_lock):
         if self.time_to_live <= 0:
-            rabbits.remove(self)
+            with rabbit_lock:
+                rabbits.remove(self)
             return
         else:
             self.time_to_live -= 1
@@ -82,13 +86,13 @@ class Rabbit:
                 self.y -= (nearest_fox.y - self.y) * self.speed / nearest_f_distance
         elif nearest_grass is not None and nearest_g_distance < self.radius:
             if nearest_g_distance < self.size + nearest_grass.size:
-                self.eat(nearest_grass, grass)
+                self.eat(nearest_grass, grass, grass_lock)
             else:
                 self.x += (nearest_grass.x - self.x) * self.speed / nearest_g_distance
                 self.y += (nearest_grass.y - self.y) * self.speed / nearest_g_distance
         elif nearest_rabbit is not None and nearest_r_distance < self.radius and self.reproductive_timer <= 0:
             if nearest_r_distance < self.size + nearest_rabbit.size + 1:
-                self.reproduce(nearest_rabbit, rabbits)
+                self.reproduce(nearest_rabbit, rabbits, grass, foxes, rabbit_lock, grass_lock)
             else:
                 self.x += (nearest_rabbit.x - self.x) * self.speed / nearest_r_distance
                 self.y += (nearest_rabbit.y - self.y) * self.speed / nearest_r_distance
@@ -133,11 +137,27 @@ class Rabbit:
             self.y = self.map_height - self.size
         
 
-    def eat(self, grass, grass_list):
-        grass_list.remove(grass)
+    def eat(self, grass, grass_list, grass_lock):
+        with grass_lock:
+            grass_list.remove(grass)
         self.time_to_live += self.max_time_to_live
-        self.eaten = True
 
     def draw(self, screen, offsetx, offsety, scale):
         if int((self.x + offsetx) * scale) > 0 and int((self.y + offsety) * scale) > 0:
-            pygame.draw.circle(screen, self.color, (int((self.x + offsetx)* scale), int((self.y + offsety) * scale)), self.size * scale)
+            x = int((self.x + offsetx) * scale - self.size * scale) 
+            y = int((self.y + offsety) * scale - self.size * scale)
+            img = pygame.transform.scale(self.color, (self.size * scale * 2, self.size * scale * 2))
+            screen.blit(img ,(x,y))
+    
+    def alive(self):
+        if self.time_to_live <= 0 or self.eaten:
+            return False
+        else:
+            return True
+
+    def live(self, grass, foxes, rabbits, rabbits_lock, grass_lock):
+        clock = pygame.time.Clock()
+        while self.alive() and not self.done:
+            self.move(grass, foxes, rabbits, rabbits_lock, grass_lock)
+            clock.tick(60)
+

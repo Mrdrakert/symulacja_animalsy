@@ -12,17 +12,18 @@ class Fox:
         self.size = FOX_SIZE
         self.speed = FOX_SPEED
         self.color = color
-        self.eaten = False
         self.map_width = map_width
         self.map_height = map_height
         self.reproduce = False
+        self.done = False
 
         self.time_to_live = 800
         self.max_time_to_live = 800
 
-    def move(self, rabbits, foxes):
+    def move(self, rabbits, foxes, fox_lock):
         if self.time_to_live <= 0:
-            foxes.remove(self)
+            with fox_lock:
+                foxes.remove(self)
             return
         else:
             self.time_to_live -= 1
@@ -84,15 +85,29 @@ class Fox:
             self.y = self.map_height - self.size
 
     def eat(self, rabbit, rabbits):
-        rabbits.remove(rabbit)
+        rabbit.eaten = True
         self.time_to_live = self.max_time_to_live
-        self.eaten = True
 
     def draw(self, screen, offsetx, offsety, scale):
         if int((self.x + offsetx) * scale) > 0 and int((self.y + offsety) * scale) > 0:
-            pygame.draw.circle(screen, self.color, (int((self.x + offsetx)* scale), int((self.y + offsety)* scale)), self.size * scale)
+            x = int((self.x + offsetx) * scale - self.size * scale) 
+            y = int((self.y + offsety) * scale - self.size * scale)
+            img = pygame.transform.scale(self.color, (self.size * scale * 2, self.size * scale * 2))
+            screen.blit(img ,(x,y))
 
     def reproduce(self, foxes):
         if self.reproduce:
             foxes.append(Fox(self.x, self.y))
             self.reproduce = False
+
+    def alive(self):
+        if self.time_to_live <= 0:
+            return False
+        else:
+            return True
+    
+    def live(self, foxes, rabbits, fox_lock):
+        clock = pygame.time.Clock()
+        while self.alive() and not self.done:
+            self.move(rabbits, foxes, fox_lock)
+            clock.tick(60)

@@ -1,6 +1,6 @@
 import pygame
 
-GRASS_SIZE = 7
+GRASS_SIZE = 10
 
 class Grass:
     def __init__(self, x, y, width, height, color):
@@ -13,4 +13,7 @@ class Grass:
 
     def draw(self, screen, offsetx, offsety, scale):
         if int((self.x + offsetx) * scale) > 0 and int((self.y + offsety) * scale) > 0:
-            pygame.draw.circle(screen, self.color, (int((self.x + offsetx) * scale), int((self.y + offsety) * scale)), self.size * scale)
+            x = int((self.x + offsetx) * scale - self.size * scale) 
+            y = int((self.y + offsety) * scale - self.size * scale)
+            img = pygame.transform.scale(self.color, (self.size * scale * 2, self.size * scale * 2))
+            screen.blit(img ,(x,y))
