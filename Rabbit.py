@@ -29,7 +29,7 @@ class Rabbit:
         self.time_going_in_direction = 0
         self.time_to_change_direction = (60, 120)
 
-        self.reproductive_cooldown = 600
+        self.reproductive_cooldown = 400
         self.reproductive_timer = 0
 
     def reproduce(self, nearest_rabbit, rabbits, grass, foxes, rabbit_lock, grass_lock):
@@ -84,7 +84,7 @@ class Rabbit:
             if nearest_f_distance != 0:
                 self.x -= (nearest_fox.x - self.x) * self.speed / nearest_f_distance
                 self.y -= (nearest_fox.y - self.y) * self.speed / nearest_f_distance
-        elif nearest_grass is not None and nearest_g_distance < self.radius:
+        elif nearest_grass is not None and nearest_g_distance < self.radius and self.time_to_live < 400:
             if nearest_g_distance < self.size + nearest_grass.size:
                 self.eat(nearest_grass, grass, grass_lock)
             else:
@@ -140,7 +140,9 @@ class Rabbit:
     def eat(self, grass, grass_list, grass_lock):
         with grass_lock:
             grass_list.remove(grass)
-        self.time_to_live += self.max_time_to_live
+        self.time_to_live += 150
+        if self.time_to_live > self.max_time_to_live:
+            self.time_to_live = self.max_time_to_live
 
     def draw(self, screen, offsetx, offsety, scale):
         if int((self.x + offsetx) * scale) > 0 and int((self.y + offsety) * scale) > 0:

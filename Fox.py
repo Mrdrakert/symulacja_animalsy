@@ -20,6 +20,10 @@ class Fox:
         self.time_to_live = 800
         self.max_time_to_live = 800
 
+        self.saved_direction = (0, 0)
+        self.time_going_in_direction = 0
+        self.time_to_change_direction = (60, 120)
+
     def move(self, rabbits, foxes, fox_lock):
         if self.time_to_live <= 0:
             with fox_lock:
@@ -38,12 +42,26 @@ class Fox:
                 nearest_distance = distance
                 nearest_rabbit = r
 
-        if nearest_rabbit is not None:
+        if nearest_rabbit is not None and self.time_to_live < self.max_time_to_live * 0.8:
             if nearest_distance < self.size + nearest_rabbit.size:
                 self.eat(nearest_rabbit, rabbits)
             else:
                 self.x += (nearest_rabbit.x - self.x) * self.speed / nearest_distance
                 self.y += (nearest_rabbit.y - self.y) * self.speed / nearest_distance
+        else:
+            #pick a direction
+            if self.saved_direction == (0, 0):
+                self.saved_direction = (random.uniform(-1, 1), random.uniform(-1, 1))
+                self.time_going_in_direction = random.randint(self.time_to_change_direction[0], self.time_to_change_direction[1])
+            
+            #move in that direction for time
+            self.time_going_in_direction -= 1
+
+            if self.time_going_in_direction > 0:
+                self.x += self.saved_direction[0] * self.speed
+                self.y += self.saved_direction[1] * self.speed
+            else:
+                self.saved_direction = (0, 0)
 
         # Reproduce
         nearest_fox = None
