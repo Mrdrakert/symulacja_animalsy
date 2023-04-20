@@ -2,8 +2,8 @@ import pygame
 import random
 import math
 
-FOX_SIZE = 15
-FOX_SPEED = 1.3
+FOX_SIZE = 12
+FOX_SPEED = 1
 
 class Fox:
     def __init__(self, x, y, map_width, map_height, color):
@@ -14,7 +14,6 @@ class Fox:
         self.color = color
         self.map_width = map_width
         self.map_height = map_height
-        self.reproduce = False
         self.done = False
 
         self.time_to_live = 800
@@ -24,7 +23,7 @@ class Fox:
         self.time_going_in_direction = 0
         self.time_to_change_direction = (60, 120)
 
-    def move(self, rabbits, foxes, fox_lock):
+    def pass_time(self, foxes, fox_lock):
         if self.time_to_live <= 0:
             with fox_lock:
                 foxes.remove(self)
@@ -32,38 +31,43 @@ class Fox:
         else:
             self.time_to_live -= 1
 
-
+    def get_rabbit_info(self, rabbits):
         # Move towards rabbits
         nearest_rabbit = None
         nearest_distance = 100000
         for r in rabbits:
             distance = math.sqrt((self.x - r.x)**2 + (self.y - r.y)**2)
-            if distance < nearest_distance:
+            if distance < nearest_distance and r.eaten == False:
                 nearest_distance = distance
                 nearest_rabbit = r
-
-        if nearest_rabbit is not None and self.time_to_live < self.max_time_to_live * 0.8:
-            if nearest_distance < self.size + nearest_rabbit.size:
-                self.eat(nearest_rabbit, rabbits)
+        return nearest_rabbit, nearest_distance
+    
+    def hunt_rabbit(self, best_rabbit, best_r_distance):
+        if best_rabbit is not None and self.time_to_live < self.max_time_to_live * 0.9:
+            if best_r_distance < self.size + best_rabbit.size:
+                self.eat(best_rabbit)
             else:
-                self.x += (nearest_rabbit.x - self.x) * self.speed / nearest_distance
-                self.y += (nearest_rabbit.y - self.y) * self.speed / nearest_distance
+                self.x += (best_rabbit.x - self.x) * self.speed / best_r_distance
+                self.y += (best_rabbit.y - self.y) * self.speed / best_r_distance
+
+    def go_randomly(self):
+        #pick a direction
+        if self.saved_direction == (0, 0):
+            self.saved_direction = (random.uniform(-1, 1), random.uniform(-1, 1))
+            #normalization
+            self.saved_direction = (self.saved_direction[0] / math.sqrt(self.saved_direction[0]**2 + self.saved_direction[1]**2), self.saved_direction[1] / math.sqrt(self.saved_direction[0]**2 + self.saved_direction[1]**2))
+            self.time_going_in_direction = random.randint(self.time_to_change_direction[0], self.time_to_change_direction[1])
+        
+        #move in that direction for time
+        self.time_going_in_direction -= 1
+
+        if self.time_going_in_direction > 0:
+            self.x += self.saved_direction[0] * self.speed
+            self.y += self.saved_direction[1] * self.speed
         else:
-            #pick a direction
-            if self.saved_direction == (0, 0):
-                self.saved_direction = (random.uniform(-1, 1), random.uniform(-1, 1))
-                self.time_going_in_direction = random.randint(self.time_to_change_direction[0], self.time_to_change_direction[1])
-            
-            #move in that direction for time
-            self.time_going_in_direction -= 1
+            self.saved_direction = (0, 0)
 
-            if self.time_going_in_direction > 0:
-                self.x += self.saved_direction[0] * self.speed
-                self.y += self.saved_direction[1] * self.speed
-            else:
-                self.saved_direction = (0, 0)
-
-        # Reproduce
+    def get_fox_info(self, foxes):
         nearest_fox = None
         nearest_distance = 100000
         for f in foxes:
@@ -71,13 +75,13 @@ class Fox:
             if distance < nearest_distance:
                 nearest_distance = distance
                 nearest_fox = f
+        return nearest_fox, nearest_distance
+    
+    def reproduce(self, foxes):
+        #foxes.append(Fox(self.x, self.y))
+        pass
 
-        if nearest_fox is not None:
-            if nearest_distance < self.size + nearest_fox.size:
-                self.reproduce = True
-            else:
-                self.reproduce = False
-
+    def handle_collisions(self, foxes):
         # Not collide with each other
         for f in foxes:
             if f is not self:
@@ -102,9 +106,11 @@ class Fox:
         elif self.y > self.map_height - self.size:
             self.y = self.map_height - self.size
 
-    def eat(self, rabbit, rabbits):
+    def eat(self, rabbit):
         rabbit.eaten = True
-        self.time_to_live = self.max_time_to_live
+        self.time_to_live += int(self.max_time_to_live/3)
+        if self.time_to_live > self.max_time_to_live:
+            self.time_to_live = self.max_time_to_live
 
     def draw(self, screen, offsetx, offsety, scale):
         if int((self.x + offsetx) * scale) > 0 and int((self.y + offsety) * scale) > 0:
@@ -113,19 +119,32 @@ class Fox:
             img = pygame.transform.scale(self.color, (self.size * scale * 2, self.size * scale * 2))
             screen.blit(img ,(x,y))
 
-    def reproduce(self, foxes):
-        if self.reproduce:
-            foxes.append(Fox(self.x, self.y))
-            self.reproduce = False
-
     def alive(self):
         if self.time_to_live <= 0:
             return False
         else:
             return True
+
+    def action(self, rabbits, foxes, fox_lock):
+        self.pass_time(foxes, fox_lock)
+        
+        best_rabbit, best_r_distance = self.get_rabbit_info(rabbits)
+
+        if best_rabbit is not None and self.time_to_live < self.max_time_to_live * 0.9:
+            self.hunt_rabbit(best_rabbit, best_r_distance)
+        else:
+            self.go_randomly()
+
+        best_fox, best_f_distance = self.get_fox_info(foxes)
+
+        if best_fox is not None:
+            if best_f_distance < self.size + best_fox.size:
+                self.reproduce(foxes)
+
+        self.handle_collisions(foxes)
     
-    def live(self, foxes, rabbits, fox_lock):
+    def live(self, foxes, rabbits, fox_lock, clock_speed = 60):
         clock = pygame.time.Clock()
         while self.alive() and not self.done:
-            self.move(rabbits, foxes, fox_lock)
-            clock.tick(60)
+            self.action(rabbits, foxes, fox_lock)
+            clock.tick(clock_speed)

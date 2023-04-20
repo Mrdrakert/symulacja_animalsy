@@ -12,7 +12,7 @@ import os
 
 # Set up the screen
 pygame.init()
-WIDTH, HEIGHT = 800, 600
+WIDTH, HEIGHT = 1000, 600
 LEFF_MENU_WIDTH = 180
 BOTTOM_MENU_HEIGHT = 100
 SIM_LEFT, SIM_UP, SIM_RIGHT, SIM_DOWN = LEFF_MENU_WIDTH, 0, WIDTH, HEIGHT - BOTTOM_MENU_HEIGHT
@@ -22,9 +22,9 @@ bottom_menu = screen.subsurface(pygame.Rect(LEFF_MENU_WIDTH, HEIGHT - BOTTOM_MEN
 simulation = screen.subsurface(pygame.Rect(SIM_LEFT,SIM_UP,SIM_RIGHT - SIM_LEFT, SIM_DOWN - SIM_UP))
 pygame.display.set_caption("Animal Simulation")
 
-scale = 0.7
+scale = 0.8
 scale_dif = 0.1
-offsetx, offsety = 50, 50
+offsetx, offsety = 10, 10
 
 grassimg = pygame.image.load(os.path.join("grass.png"))
 grassimg.convert()
@@ -60,6 +60,8 @@ RABBIT_RADIUS = RABBIT_SIZE * 10
 RABBIT_SPEED = 1
 FOX_SPEED = 1.3
 
+clock_speed = 60
+drawing = True
 
 rabbits = []
 foxes = []
@@ -68,9 +70,9 @@ rabbit_lock = Lock()
 fox_lock = Lock()
 grass_lock = Lock()
 
-grasses = Grasses()
+grasses = Grasses(WIDTH, HEIGHT, grassimg, 15)
 
-Thread(target = grasses.live, args = (WIDTH, HEIGHT, grassimg)).start()
+Thread(target = grasses.live, args = ()).start()
 
 # Create animals
 for i in range(RABBIT_NUMBER):
@@ -78,14 +80,14 @@ for i in range(RABBIT_NUMBER):
     y = random.randrange(RABBIT_SIZE, HEIGHT - RABBIT_SIZE)
     rabbit = Rabbit(x, y, WIDTH, HEIGHT, rabbitimg)
     rabbits.append(rabbit)
-    Thread(target = rabbit.live, args = (grasses.grass_list, foxes, rabbits, rabbit_lock, grass_lock)).start()
+    Thread(target = rabbit.live, args = (grasses.grass_list, foxes, rabbits, rabbit_lock, grass_lock, clock_speed)).start()
 
 for i in range(FOX_NUMBER):
     x = random.randrange(FOX_SIZE, WIDTH - FOX_SIZE)
     y = random.randrange(FOX_SIZE, HEIGHT - FOX_SIZE)
     fox = Fox(x, y, WIDTH, HEIGHT, foximg)
     foxes.append(fox)
-    Thread(target = fox.live, args = (foxes, rabbits, fox_lock)).start()
+    Thread(target = fox.live, args = (foxes, rabbits, fox_lock, clock_speed)).start()
 
 
 
@@ -97,65 +99,69 @@ sim_pressed = False
 
 while running:
     # Handle events
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Check for left mouse button click
-            # Check if mouse click is within the bounds of the surface
+    if (drawing == False):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+    else:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Check for left mouse button click
+                # Check if mouse click is within the bounds of the surface
+                mouse_x, mouse_y = event.pos
+                # Check if mouse click is within the bounds of the surface
+                if SIM_LEFT <= mouse_x <= SIM_RIGHT and SIM_UP <= mouse_y <= SIM_DOWN:
+                    sim_pressed = True
+                    prev_mouse_x = mouse_x
+                    prev_mouse_y = mouse_y
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:  # Check for left mouse button release
+                sim_pressed = False
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 4: #scroll up
+                mouse_x, mouse_y = event.pos
+                if SIM_LEFT <= mouse_x <= SIM_RIGHT and SIM_UP <= mouse_y <= SIM_DOWN:
+                    scale = scale + scale_dif
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 5: #scroll down
+                mouse_x, mouse_y = event.pos
+                if SIM_LEFT <= mouse_x <= SIM_RIGHT and SIM_UP <= mouse_y <= SIM_DOWN:
+                    scale = scale - scale_dif
+        if sim_pressed:
             mouse_x, mouse_y = event.pos
-            # Check if mouse click is within the bounds of the surface
-            if SIM_LEFT <= mouse_x <= SIM_RIGHT and SIM_UP <= mouse_y <= SIM_DOWN:
-                sim_pressed = True
-                prev_mouse_x = mouse_x
-                prev_mouse_y = mouse_y
-        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:  # Check for left mouse button release
-            sim_pressed = False
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 4: #scroll up
-            mouse_x, mouse_y = event.pos
-            if SIM_LEFT <= mouse_x <= SIM_RIGHT and SIM_UP <= mouse_y <= SIM_DOWN:
-                scale = scale + scale_dif
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 5: #scroll down
-            mouse_x, mouse_y = event.pos
-            if SIM_LEFT <= mouse_x <= SIM_RIGHT and SIM_UP <= mouse_y <= SIM_DOWN:
-                scale = scale - scale_dif
-    if sim_pressed:
-        mouse_x, mouse_y = event.pos
-        offsetx = offsetx - prev_mouse_x + mouse_x
-        offsety = offsety - prev_mouse_y + mouse_y
-        prev_mouse_x = mouse_x
-        prev_mouse_y = mouse_y
+            offsetx = offsetx - prev_mouse_x + mouse_x
+            offsety = offsety - prev_mouse_y + mouse_y
+            prev_mouse_x = mouse_x
+            prev_mouse_y = mouse_y
 
-    # Clear the screen
-    simulation.fill(LIGHTGRAY)
-    pygame.draw.rect(simulation, DARKGREEN, pygame.Rect(int(offsetx * scale), int(offsety * scale), int(WIDTH * scale), int(HEIGHT * scale)))
-    # Move animals
+    if (drawing):
+        simulation.fill(LIGHTGRAY)
+        pygame.draw.rect(simulation, DARKGREEN, pygame.Rect(int(offsetx * scale), int(offsety * scale), int(WIDTH * scale), int(HEIGHT * scale)))
 
-    for gej in grasses.grass_list:
-        gej.draw(simulation, offsetx, offsety, scale)
+        for grass in grasses.grass_list:
+            grass.draw(simulation, offsetx, offsety, scale)
 
     for rabbit in rabbits:
         if rabbit.alive() == False:
             rabbits.remove(rabbit)
         else:
-            rabbit.draw(simulation, offsetx, offsety, scale)
+            if (drawing):
+                rabbit.draw(simulation, offsetx, offsety, scale)
 
     for fox in foxes:
         if fox.alive() == False:
             foxes.remove(fox)
         else:
-            fox.draw(simulation, offsetx, offsety, scale)
+            if (drawing):
+                fox.draw(simulation, offsetx, offsety, scale)
 
-    
+    if (drawing):
+        left_menu.fill(GREY)
+        bottom_menu.fill(DARKGRAY)
 
-    #menus
-    left_menu.fill(GREY)
-    bottom_menu.fill(DARKGRAY)
+        pygame.display.flip()
 
-    # Update the screen
-    pygame.display.flip()
-
-    # Wait for the next frame
-    clock.tick(60)
+    #print("Frame: ", len(rabbits), len(foxes))
+          
+    clock.tick(clock_speed)
 
 grasses.done = True
 for rabbit in rabbits:

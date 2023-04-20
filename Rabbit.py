@@ -3,10 +3,10 @@ import math
 import pygame
 from threading import Thread
 
-RABBIT_SIZE = 10
+RABBIT_SIZE = 8
 RABBIT_NUMBER = 50
 RABBIT_RADIUS = RABBIT_SIZE * 10
-RABBIT_SPEED = 1
+RABBIT_SPEED = 0.8
 
 class Rabbit:
     def __init__(self, x, y, map_width, map_height, color):
@@ -30,7 +30,7 @@ class Rabbit:
         self.time_to_change_direction = (60, 120)
 
         self.reproductive_cooldown = 400
-        self.reproductive_timer = 0
+        self.reproductive_timer = self.reproductive_cooldown
 
     def reproduce(self, nearest_rabbit, rabbits, grass, foxes, rabbit_lock, grass_lock):
         if (self.reproductive_timer <= 0 and nearest_rabbit.reproductive_timer <= 0):
@@ -41,7 +41,7 @@ class Rabbit:
             nearest_rabbit.reproductive_timer = nearest_rabbit.reproductive_cooldown
             self.reproductive_timer = self.reproductive_cooldown
 
-    def move(self, grass, foxes, rabbits, rabbit_lock, grass_lock):
+    def pass_time(self, rabbits, rabbit_lock):
         if self.time_to_live <= 0:
             with rabbit_lock:
                 rabbits.remove(self)
@@ -52,7 +52,7 @@ class Rabbit:
         if self.reproductive_timer > 0:
             self.reproductive_timer -= 1
 
-        # Move towards grass
+    def get_grass_info(self, grass):
         nearest_grass = None
         nearest_g_distance = 100000
         for g in grass:
@@ -61,7 +61,9 @@ class Rabbit:
                 nearest_g_distance = distance
                 nearest_grass = g
 
-        # Move away from foxes
+        return nearest_grass, nearest_g_distance
+    
+    def get_fox_info(self, foxes):
         nearest_fox = None
         nearest_f_distance = 100000
         for f in foxes:
@@ -69,8 +71,10 @@ class Rabbit:
             if distance < nearest_f_distance:
                 nearest_f_distance = distance
                 nearest_fox = f
-
-        # Reproduce
+        
+        return nearest_fox, nearest_f_distance
+    
+    def get_rabbit_info(self, rabbits):
         nearest_rabbit = None
         nearest_r_distance = 100000
         for r in rabbits:
@@ -79,40 +83,45 @@ class Rabbit:
                 nearest_r_distance = distance
                 nearest_rabbit = r
 
-        # choose what to do
-        if nearest_fox is not None and nearest_f_distance < self.radius:
-            if nearest_f_distance != 0:
-                self.x -= (nearest_fox.x - self.x) * self.speed / nearest_f_distance
-                self.y -= (nearest_fox.y - self.y) * self.speed / nearest_f_distance
-        elif nearest_grass is not None and nearest_g_distance < self.radius and self.time_to_live < 400:
-            if nearest_g_distance < self.size + nearest_grass.size:
+        return nearest_rabbit, nearest_r_distance
+    
+    def run_from_fox(self, nearest_fox, nearest_f_distance):
+        if nearest_f_distance != 0:
+            self.x -= (nearest_fox.x - self.x) * self.speed / nearest_f_distance
+            self.y -= (nearest_fox.y - self.y) * self.speed / nearest_f_distance
+
+    def hunt_grass(self, nearest_grass, nearest_g_distance, grass, grass_lock):
+        if nearest_g_distance < self.size + nearest_grass.size:
                 self.eat(nearest_grass, grass, grass_lock)
-            else:
-                self.x += (nearest_grass.x - self.x) * self.speed / nearest_g_distance
-                self.y += (nearest_grass.y - self.y) * self.speed / nearest_g_distance
-        elif nearest_rabbit is not None and nearest_r_distance < self.radius and self.reproductive_timer <= 0:
-            if nearest_r_distance < self.size + nearest_rabbit.size + 1:
-                self.reproduce(nearest_rabbit, rabbits, grass, foxes, rabbit_lock, grass_lock)
-            else:
-                self.x += (nearest_rabbit.x - self.x) * self.speed / nearest_r_distance
-                self.y += (nearest_rabbit.y - self.y) * self.speed / nearest_r_distance
         else:
-            #pick a direction
-            if self.saved_direction == (0, 0):
-                self.saved_direction = (random.uniform(-1, 1), random.uniform(-1, 1))
-                self.time_going_in_direction = random.randint(self.time_to_change_direction[0], self.time_to_change_direction[1])
-            
-            #move in that direction for time
-            self.time_going_in_direction -= 1
+            self.x += (nearest_grass.x - self.x) * self.speed / nearest_g_distance
+            self.y += (nearest_grass.y - self.y) * self.speed / nearest_g_distance
+    
+    def find_partner(self, best_rabbit, best_r_distance, rabbits, grass, foxes, rabbit_lock, grass_lock):
+        if best_r_distance < self.size + best_rabbit.size + 1:
+                self.reproduce(best_rabbit, rabbits, grass, foxes, rabbit_lock, grass_lock)
+        else:
+            self.x += (best_rabbit.x - self.x) * self.speed / best_r_distance
+            self.y += (best_rabbit.y - self.y) * self.speed / best_r_distance
 
-            if self.time_going_in_direction > 0:
-                self.x += self.saved_direction[0] * self.speed
-                self.y += self.saved_direction[1] * self.speed
-            else:
-                self.saved_direction = (0, 0)
-            
+    def go_randomly(self):
+        #pick a direction
+        if self.saved_direction == (0, 0):
+            self.saved_direction = (random.uniform(-1, 1), random.uniform(-1, 1))
+            #normalization
+            self.saved_direction = (self.saved_direction[0] / math.sqrt(self.saved_direction[0]**2 + self.saved_direction[1]**2), self.saved_direction[1] / math.sqrt(self.saved_direction[0]**2 + self.saved_direction[1]**2))
+            self.time_going_in_direction = random.randint(self.time_to_change_direction[0], self.time_to_change_direction[1])
+        
+        #move in that direction for time
+        self.time_going_in_direction -= 1
 
-        # Not collide with each other
+        if self.time_going_in_direction > 0:
+            self.x += self.saved_direction[0] * self.speed
+            self.y += self.saved_direction[1] * self.speed
+        else:
+            self.saved_direction = (0, 0)
+
+    def handle_collisions(self, rabbits):
         for r in rabbits:
             if r is not self:
                 distance = math.sqrt((self.x - r.x)**2 + (self.y - r.y)**2)
@@ -135,12 +144,11 @@ class Rabbit:
             self.y = self.size
         elif self.y > self.map_height - self.size:
             self.y = self.map_height - self.size
-        
 
     def eat(self, grass, grass_list, grass_lock):
         with grass_lock:
             grass_list.remove(grass)
-        self.time_to_live += 150
+        self.time_to_live += int(self.max_time_to_live/3)
         if self.time_to_live > self.max_time_to_live:
             self.time_to_live = self.max_time_to_live
 
@@ -156,10 +164,29 @@ class Rabbit:
             return False
         else:
             return True
+        
+    def action(self, grass, foxes, rabbits, rabbit_lock, grass_lock):
+        self.pass_time(rabbits, rabbit_lock)
 
-    def live(self, grass, foxes, rabbits, rabbits_lock, grass_lock):
+        nearest_grass, nearest_g_distance = self.get_grass_info(grass)
+        nearest_fox, nearest_f_distance = self.get_fox_info(foxes)
+        best_rabbit, best_r_distance = self.get_rabbit_info(rabbits)
+
+        if nearest_fox is not None and nearest_f_distance < self.radius:
+            self.run_from_fox(nearest_fox, nearest_f_distance)
+        elif nearest_grass is not None and nearest_g_distance < self.radius and self.time_to_live < 400:
+            self.hunt_grass(nearest_grass, nearest_g_distance, grass, grass_lock)
+        elif best_rabbit is not None and best_r_distance < self.radius and self.reproductive_timer <= 0:
+            self.find_partner(best_rabbit, best_r_distance, rabbits, grass, foxes, rabbit_lock, grass_lock)
+        else:
+            self.go_randomly()
+
+        self.handle_collisions(rabbits)
+
+    def live(self, grass, foxes, rabbits, rabbits_lock, grass_lock, clock_speed = 60):
         clock = pygame.time.Clock()
         while self.alive() and not self.done:
-            self.move(grass, foxes, rabbits, rabbits_lock, grass_lock)
-            clock.tick(60)
+            self.action(grass, foxes, rabbits, rabbits_lock, grass_lock)
+
+            clock.tick(clock_speed)
 
