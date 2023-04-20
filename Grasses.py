@@ -3,7 +3,7 @@ import pygame
 from Grass import Grass
 
 class Grasses:
-    def __init__(self, width, height, color, grass_spawn_cd):
+    def __init__(self, width, height, color, grass_spawn_cd, life_speed_up = 1):
         self.grass_list = []
         self.done = False
 
@@ -11,7 +11,7 @@ class Grasses:
         self.height = height
         self.color = color
 
-        self.grass_spawn_cd = grass_spawn_cd
+        self.grass_spawn_cd = grass_spawn_cd * life_speed_up
 
         for i in range(30):
             self.add_grass(width, height, color)

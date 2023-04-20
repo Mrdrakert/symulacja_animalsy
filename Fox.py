@@ -1,20 +1,22 @@
+from time import sleep
 import pygame
 import random
 import math
 
 FOX_SIZE = 12
-FOX_SPEED = 1
 
 class Fox:
-    def __init__(self, x, y, map_width, map_height, color):
+    def __init__(self, x, y, map_width, map_height, color, speed, life_speed_up = 1):
         self.x = x
         self.y = y
         self.size = FOX_SIZE
-        self.speed = FOX_SPEED
+        self.speed = speed * life_speed_up
         self.color = color
         self.map_width = map_width
         self.map_height = map_height
         self.done = False
+
+        self.life_speed_up = life_speed_up
 
         self.time_to_live = 800
         self.max_time_to_live = 800
@@ -29,7 +31,7 @@ class Fox:
                 foxes.remove(self)
             return
         else:
-            self.time_to_live -= 1
+            self.time_to_live -= 1 * self.life_speed_up
 
     def get_rabbit_info(self, rabbits):
         # Move towards rabbits
@@ -108,7 +110,7 @@ class Fox:
 
     def eat(self, rabbit):
         rabbit.eaten = True
-        self.time_to_live += int(self.max_time_to_live/3)
+        self.time_to_live += int(self.max_time_to_live/2)
         if self.time_to_live > self.max_time_to_live:
             self.time_to_live = self.max_time_to_live
 
@@ -143,7 +145,7 @@ class Fox:
 
         self.handle_collisions(foxes)
     
-    def live(self, foxes, rabbits, fox_lock, clock_speed = 60):
+    def live(self, foxes, rabbits, fox_lock, clock_speed):
         clock = pygame.time.Clock()
         while self.alive() and not self.done:
             self.action(rabbits, foxes, fox_lock)
