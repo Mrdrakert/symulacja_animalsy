@@ -22,6 +22,8 @@ class Fox:
         self.children_count = fox_children
         self.radius = FOX_RADIUS
 
+        self.sex = random.choice(['m', 'f'])
+
         self.life_speed_up = life_speed_up
 
         self.time_to_live = life
@@ -37,7 +39,7 @@ class Fox:
     def pass_time(self, foxes, fox_lock):
         if self.time_to_live <= 0:
             with fox_lock:
-                foxes.remove(self)
+                self.done = True
             return
         else:
             self.time_to_live -= 1 * self.life_speed_up
@@ -86,7 +88,7 @@ class Fox:
         nearest_distance = 100000
         for f in foxes:
             distance = math.sqrt((self.x - f.x)**2 + (self.y - f.y)**2)
-            if distance < nearest_distance and f is not self and f.reproductive_timer <= 0:
+            if distance < nearest_distance and f is not self and f.reproductive_timer <= 0 and f.sex != self.sex:
                 nearest_distance = distance
                 nearest_fox = f
         return nearest_fox, nearest_distance
@@ -129,7 +131,8 @@ class Fox:
                 new_fox = Fox(self.x, self.y, self.map_width, self.map_height, self.color, self.speed/self.life_speed_up, self.life_speed_up, self.children_count, self.reproductive_cooldown, self.max_time_to_live)
                 new_fox.reproductive_timer = new_fox.reproductive_cooldown
                 foxes.append(new_fox)
-                Thread(target = new_fox.live, args = (foxes, rabbits, fox_lock, clock_speed, self.drawing)).start()
+                self.threads[new_fox] = Thread(target = new_fox.live, args = (foxes, rabbits, self.threads, fox_lock, clock_speed, self.drawing))
+                self.threads[new_fox].start()
                 nearest_fox.reproductive_timer = nearest_fox.reproductive_cooldown
                 self.reproductive_timer = self.reproductive_cooldown
 
@@ -145,10 +148,18 @@ class Fox:
             x = int((self.x + offsetx) * scale - self.size * scale) 
             y = int((self.y + offsety) * scale - self.size * scale)
             img = pygame.transform.scale(self.color, (self.size * scale * 2, self.size * scale * 2))
+            #tint image based on self.sex
+            #pink = f, blue = m
+            if (self.sex == 'f'):
+                img.fill((255, 84, 57), special_flags=pygame.BLEND_RGB_MULT)
+            else:
+                img.fill((60, 90, 255), special_flags=pygame.BLEND_RGB_MULT)
             screen.blit(img ,(x,y))
 
     def alive(self):
         if self.time_to_live <= 0:
+            return False
+        elif self.done:
             return False
         else:
             return True
@@ -174,8 +185,9 @@ class Fox:
 
         self.handle_collisions(foxes)
     
-    def live(self, foxes, rabbits, fox_lock, clock_speed, drawing):
+    def live(self, foxes, rabbits, threads, fox_lock, clock_speed, drawing):
         self.drawing = drawing
+        self.threads = threads
         if drawing:
             clock = pygame.time.Clock()
         while self.alive() and not self.done:

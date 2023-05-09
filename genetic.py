@@ -3,7 +3,7 @@ from Simulation import Simulation
 from threading import Thread
 
 def GetStability(params, results_big):
-    tries, cutoff_point = 2, 2000
+    tries, cutoff_point = 10, 2000
     results = []
 
     for _ in range(tries):
@@ -35,7 +35,7 @@ def get_random_params():
     params = {
         "rabbit_speed": random.uniform(0.5, 1.5),
         "fox_speed": random.uniform(0.5, 2),
-        "rabbit_children": random.randint(1, 6),
+        "rabbit_children": random.randint(3, 6),
         "fox_children": 1,
         "rabbit_reproductive": random.randint(400, 800),
         "rabbit_life": random.randint(200, 1000),
@@ -45,7 +45,7 @@ def get_random_params():
     return [params, -1]
 
 
-amount = 2
+amount = 10
 generation = []
 
 for i in range(amount):

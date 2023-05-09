@@ -1,5 +1,6 @@
+import threading
 import time
-import pygame
+
 import random
 import os
 from threading import Thread
@@ -7,6 +8,7 @@ from threading import Lock
 from Fox import Fox
 from Rabbit import Rabbit
 from Grasses import Grasses
+import pygame
 
 WIDTH, HEIGHT = 1000, 600
 LEFF_MENU_WIDTH = 180
@@ -75,21 +77,23 @@ class Simulation():
     def run(self):
         grasses = Grasses(WIDTH, HEIGHT, self.grassimg, self.clock_speed/3, self.life_speed_up) #self.clock_speed/4
         Thread(target = grasses.live, args = ()).start()
-
+        self.threads = {}
         # Create animals
         for i in range(RABBIT_NUMBER):
             x = random.randrange(RABBIT_SIZE, WIDTH - RABBIT_SIZE)
             y = random.randrange(RABBIT_SIZE, HEIGHT - RABBIT_SIZE)
             rabbit = Rabbit(x, y, WIDTH, HEIGHT, self.rabbitimg, self.params["rabbit_speed"] , self.life_speed_up, self.params["rabbit_children"], self.params["rabbit_reproductive"], self.params["rabbit_life"])
             self.rabbits.append(rabbit)
-            Thread(target = rabbit.live, args = (grasses.grass_list, self.foxes, self.rabbits, self.rabbit_lock, self.grass_lock, self.clock_speed, self.drawing)).start()
+            self.threads[rabbit] = Thread(target = rabbit.live, args = (grasses.grass_list, self.foxes, self.rabbits, self.threads, self.rabbit_lock, self.grass_lock, self.clock_speed, self.drawing))
+            self.threads[rabbit].start()
 
         for i in range(FOX_NUMBER):
             x = random.randrange(FOX_SIZE, WIDTH - FOX_SIZE)
             y = random.randrange(FOX_SIZE, HEIGHT - FOX_SIZE)
             fox = Fox(x, y, WIDTH, HEIGHT, self.foximg, self.params["fox_speed"] , self.life_speed_up, self.params["fox_children"], self.params["fox_reproductive"], self.params["fox_life"])
             self.foxes.append(fox)
-            Thread(target = fox.live, args = (self.foxes, self.rabbits, self.fox_lock, self.clock_speed, self.drawing)).start()
+            self.threads[fox] = Thread(target = fox.live, args = (self.foxes, self.rabbits, self.threads, self.fox_lock, self.clock_speed, self.drawing))
+            self.threads[fox].start()
 
         # Set up game loop
         running = True
@@ -99,7 +103,8 @@ class Simulation():
 
         while running:
             self.ticks_lived += 1
-
+            if self.ticks_lived % 100 == 0:
+                print('number of current threads is ', threading.active_count())
             # Handle events
             if (self.drawing == False):
                 pass
@@ -144,6 +149,7 @@ class Simulation():
 
             for rabbit in self.rabbits:
                 if rabbit.alive() == False:
+                    self.threads[rabbit].join()
                     self.rabbits.remove(rabbit)
                 else:
                     if (self.drawing):
@@ -151,6 +157,7 @@ class Simulation():
 
             for fox in self.foxes:
                 if fox.alive() == False:
+                    self.threads[fox].join()
                     self.foxes.remove(fox)
                 else:
                     if (self.drawing):
@@ -167,12 +174,10 @@ class Simulation():
             else:
                 time.sleep(1/self.clock_speed)
 
-            #print time since last tick
-            print(len(self.rabbits))
-
             #end criteria)
-            #print(len(self.rabbits) + len(self.foxes))
-            if (len(self.rabbits) == 0 or len(self.foxes) == 0 or len(self.rabbits) + len(self.foxes) > 150):
+            print(len(self.rabbits), len(self.foxes))
+
+            if (len(self.rabbits) == 0 or len(self.foxes) == 0 ):
                 running = False
 
         grasses.done = True

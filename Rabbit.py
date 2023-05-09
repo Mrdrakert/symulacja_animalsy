@@ -22,6 +22,8 @@ class Rabbit:
         self.children_count = children_count
         self.drawing = True
 
+        self.sex = random.choice(['m', 'f'])
+
         self.life_speed_up = life_speed_up
 
         self.map_width = map_width
@@ -35,25 +37,28 @@ class Rabbit:
         self.time_to_change_direction = (60, 120)
 
         self.reproductive_cooldown = reproductive
+        self.cooldown_first = reproductive
         self.reproductive_cooldown -= random.randint(0, 100)
         self.reproductive_timer = self.reproductive_cooldown
 
     def reproduce(self, nearest_rabbit, rabbits, grass, foxes, rabbit_lock, grass_lock, clock_speed):
-        if (self.reproductive_timer <= 0 and nearest_rabbit.reproductive_timer <= 0):
-            for _ in range(self.children_count):
-                new_rabbit = Rabbit(self.x, self.y, self.map_width, self.map_height, self.color, self.speed/self.life_speed_up, self.life_speed_up, self.children_count, self.reproductive_cooldown, self.max_time_to_live)
-                new_rabbit.reproductive_timer = new_rabbit.reproductive_cooldown
-                new_rabbit.time_to_live = new_rabbit.max_time_to_live / 2
-                with rabbit_lock:
-                    rabbits.append(new_rabbit)
-                Thread(target = new_rabbit.live, args = (grass, foxes, rabbits, rabbit_lock, grass_lock, clock_speed, self.drawing)).start()
+        if (self.reproductive_timer <= 0 and nearest_rabbit.reproductive_timer <= 0 and self.alive() and nearest_rabbit.alive()):
             nearest_rabbit.reproductive_timer = nearest_rabbit.reproductive_cooldown
             self.reproductive_timer = self.reproductive_cooldown
+            for _ in range(self.children_count):
+                new_rabbit = Rabbit(self.x, self.y, self.map_width, self.map_height, self.color, self.speed/self.life_speed_up, self.life_speed_up, self.children_count, self.cooldown_first, self.max_time_to_live)
+                new_rabbit.reproductive_timer = new_rabbit.reproductive_cooldown
+                new_rabbit.time_to_live = 2* new_rabbit.max_time_to_live / 3
+                #with rabbit_lock:
+                rabbits.append(new_rabbit)
+                self.threads[new_rabbit] = Thread(target = new_rabbit.live, args = (grass, foxes, rabbits, self.threads, rabbit_lock, grass_lock, clock_speed, self.drawing))
+                self.threads[new_rabbit].start()
+            
 
     def pass_time(self, rabbits, rabbit_lock):
         if self.time_to_live <= 0:
             with rabbit_lock:
-                rabbits.remove(self)
+                rabbits.done = True
             return
         else:
             self.time_to_live -= 1 * self.life_speed_up
@@ -88,7 +93,7 @@ class Rabbit:
         nearest_r_distance = 100000
         for r in rabbits:
             distance = math.sqrt((self.x - r.x)**2 + (self.y - r.y)**2)
-            if distance < nearest_r_distance and r is not self and r.reproductive_timer <= 0:
+            if distance < nearest_r_distance and r is not self and r.reproductive_timer <= 0 and r.sex != self.sex:
                 nearest_r_distance = distance
                 nearest_rabbit = r
 
@@ -166,10 +171,14 @@ class Rabbit:
             x = int((self.x + offsetx) * scale - self.size * scale) 
             y = int((self.y + offsety) * scale - self.size * scale)
             img = pygame.transform.scale(self.color, (self.size * scale * 2, self.size * scale * 2))
+            if (self.sex == 'f'):
+                img.fill((240, 173, 200), special_flags=pygame.BLEND_RGB_MULT)
+            else:
+                img.fill((178, 200, 240), special_flags=pygame.BLEND_RGB_MULT)
             screen.blit(img ,(x,y))
     
     def alive(self):
-        if self.time_to_live <= 0 or self.eaten:
+        if self.time_to_live <= 0 or self.eaten or self.done:
             return False
         else:
             return True
@@ -192,16 +201,19 @@ class Rabbit:
 
         self.handle_collisions(rabbits)
 
-    def live(self, grass, foxes, rabbits, rabbits_lock, grass_lock, clock_speed, drawing):
+    def live(self, grass, foxes, rabbits, threads, rabbits_lock, grass_lock, clock_speed, drawing):
         self.drawing = drawing
+        self.threads = threads
         if drawing:
             clock = pygame.time.Clock()
+        if len(rabbits) < 120:
+            while self.alive() and not self.done:
+                self.action(grass, foxes, rabbits, rabbits_lock, grass_lock, clock_speed)
 
-        while self.alive() and not self.done:
-            self.action(grass, foxes, rabbits, rabbits_lock, grass_lock, clock_speed)
-
-            if drawing:
-                clock.tick(clock_speed)
-            else:
-                time.sleep(1/clock_speed)
+                if drawing:
+                    clock.tick(clock_speed)
+                else:
+                    time.sleep(1/clock_speed)
+        else:
+            self.done = True
 
