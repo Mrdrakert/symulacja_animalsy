@@ -1,12 +1,15 @@
+from threading import Thread
 from time import sleep
+import time
 import pygame
 import random
 import math
 
 FOX_SIZE = 12
+FOX_RADIUS = 60
 
 class Fox:
-    def __init__(self, x, y, map_width, map_height, color, speed, life_speed_up = 1):
+    def __init__(self, x, y, map_width, map_height, color, speed, life_speed_up = 1, drawing = True, fox_children = 1):
         self.x = x
         self.y = y
         self.size = FOX_SIZE
@@ -15,6 +18,9 @@ class Fox:
         self.map_width = map_width
         self.map_height = map_height
         self.done = False
+        self.drawing = drawing
+        self.children_count = fox_children
+        self.radius = FOX_RADIUS
 
         self.life_speed_up = life_speed_up
 
@@ -24,6 +30,9 @@ class Fox:
         self.saved_direction = (0, 0)
         self.time_going_in_direction = 0
         self.time_to_change_direction = (60, 120)
+
+        self.reproductive_cooldown = 400
+        self.reproductive_timer = self.reproductive_cooldown
 
     def pass_time(self, foxes, fox_lock):
         if self.time_to_live <= 0:
@@ -78,10 +87,7 @@ class Fox:
                 nearest_distance = distance
                 nearest_fox = f
         return nearest_fox, nearest_distance
-    
-    def reproduce(self, foxes):
-        #foxes.append(Fox(self.x, self.y))
-        pass
+
 
     def handle_collisions(self, foxes):
         # Not collide with each other
@@ -114,6 +120,23 @@ class Fox:
         if self.time_to_live > self.max_time_to_live:
             self.time_to_live = self.max_time_to_live
 
+    def reproduce(self, nearest_fox, rabbits, grass, foxes, rabbit_lock, grass_lock, fox_lock, clock_speed):
+        if (self.reproductive_timer <= 0 and nearest_fox.reproductive_timer <= 0):
+            for _ in range(self.children_count):
+                new_fox = Fox(self.x, self.y, self.map_width, self.map_height, self.color, self.speed/self.life_speed_up, self.life_speed_up, self.children_count)
+                new_fox.reproductive_timer = new_fox.reproductive_cooldown
+                foxes.append(new_fox)
+                Thread(target = new_fox.live, args = (foxes, rabbits, fox_lock, clock_speed, self.drawing)).start()
+                nearest_fox.reproductive_timer = nearest_fox.reproductive_cooldown
+                self.reproductive_timer = self.reproductive_cooldown
+
+    def find_partner(self, best_fox, best_f_distance, rabbits, grass, foxes, rabbit_lock, grass_lock, fox_lock, clock_speed):
+        if best_f_distance < self.size + best_fox.size + 1:
+                self.reproduce(best_fox, rabbits, grass, foxes, rabbit_lock, grass_lock, fox_lock, clock_speed)
+        else:
+            self.x += (best_fox.x - self.x) * self.speed / best_f_distance
+            self.y += (best_fox.y - self.y) * self.speed / best_f_distance
+
     def draw(self, screen, offsetx, offsety, scale):
         if int((self.x + offsetx) * scale) > 0 and int((self.y + offsety) * scale) > 0:
             x = int((self.x + offsetx) * scale - self.size * scale) 
@@ -131,22 +154,30 @@ class Fox:
         self.pass_time(foxes, fox_lock)
         
         best_rabbit, best_r_distance = self.get_rabbit_info(rabbits)
+        best_fox, best_f_distance = self.get_fox_info(foxes)
 
+        #if best_fox is not None and best_f_distance < self.radius and self.reproductive_timer <= 0:
+            #self.find_partner(best_fox, best_f_distance, rabbits, foxes, fox_lock)
+        #el
         if best_rabbit is not None and self.time_to_live < self.max_time_to_live * 0.9:
             self.hunt_rabbit(best_rabbit, best_r_distance)
         else:
             self.go_randomly()
 
-        best_fox, best_f_distance = self.get_fox_info(foxes)
-
-        if best_fox is not None:
-            if best_f_distance < self.size + best_fox.size:
-                self.reproduce(foxes)
+        #if best_fox is not None:
+            #if best_f_distance < self.size + best_fox.size:
+                #self.reproduce(foxes)
 
         self.handle_collisions(foxes)
     
-    def live(self, foxes, rabbits, fox_lock, clock_speed):
-        clock = pygame.time.Clock()
+    def live(self, foxes, rabbits, fox_lock, clock_speed, drawing):
+        self.drawing = drawing
+        if drawing:
+            clock = pygame.time.Clock()
         while self.alive() and not self.done:
             self.action(rabbits, foxes, fox_lock)
-            clock.tick(clock_speed)
+
+            if drawing:
+                clock.tick(clock_speed)
+            else:
+                time.sleep(1/clock_speed)

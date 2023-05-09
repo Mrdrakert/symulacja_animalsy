@@ -1,3 +1,4 @@
+import time
 import pygame
 import random
 import os
@@ -24,36 +25,45 @@ RABBIT_NUMBER = 50
 FOX_NUMBER = 10
 GRASS_NUMBER = 100
 
-RABBIT_SPEED = 0.8
+RABBIT_SPEED = 0.9
 FOX_SPEED = 1.1
 
 class Simulation():
-    def __init__(self, clock_speed = 60, life_speed_up = 1, draw = True):
+    def __init__(self, clock_speed = 60, life_speed_up = 1, draw = True, params = {"rabbit_speed": RABBIT_SPEED,"fox_speed": FOX_SPEED,"rabbit_children": 3, "fox_children": 1}):
+        self.params = params
         self.life_speed_up = life_speed_up
         self.ticks_lived = 0
         # Set up the screen
-        pygame.init()
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        self.left_menu = self.screen.subsurface(pygame.Rect(0,0,LEFF_MENU_WIDTH, HEIGHT))
-        self.bottom_menu = self.screen.subsurface(pygame.Rect(LEFF_MENU_WIDTH, HEIGHT - BOTTOM_MENU_HEIGHT, WIDTH - LEFF_MENU_WIDTH, BOTTOM_MENU_HEIGHT))
-        self.simulation = self.screen.subsurface(pygame.Rect(SIM_LEFT,SIM_UP,SIM_RIGHT - SIM_LEFT, SIM_DOWN - SIM_UP))
-        pygame.display.set_caption("Animal Simulation")
+        if draw:
+            pygame.init()
+            self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+            self.left_menu = self.screen.subsurface(pygame.Rect(0,0,LEFF_MENU_WIDTH, HEIGHT))
+            self.bottom_menu = self.screen.subsurface(pygame.Rect(LEFF_MENU_WIDTH, HEIGHT - BOTTOM_MENU_HEIGHT, WIDTH - LEFF_MENU_WIDTH, BOTTOM_MENU_HEIGHT))
+            self.simulation = self.screen.subsurface(pygame.Rect(SIM_LEFT,SIM_UP,SIM_RIGHT - SIM_LEFT, SIM_DOWN - SIM_UP))
+            pygame.display.set_caption("Animal Simulation")
 
         self.scale = 0.8
         self.scale_dif = 0.1
         self.offsetx, self.offsety = 10, 10
 
-        self.grassimg = pygame.image.load(os.path.join("grass.png"))
-        self.grassimg.convert()
+        self.grassimg = None
+        self.foximg = None
+        self.rabbitimg = None
 
-        self.foximg = pygame.image.load(os.path.join("fox.png"))
-        self.foximg.convert()
+        self.drawing = draw
 
-        self.rabbitimg = pygame.image.load(os.path.join("rabbit.png"))
-        self.rabbitimg.convert()
+        if self.drawing:
+            self.grassimg = pygame.image.load(os.path.join("grass.png"))
+            self.grassimg.convert_alpha()
+
+            self.foximg = pygame.image.load(os.path.join("fox.png"))
+            self.foximg.convert_alpha()
+
+            self.rabbitimg = pygame.image.load(os.path.join("rabbit.png"))
+            self.rabbitimg.convert_alpha()
 
         self.clock_speed = clock_speed
-        self.drawing = draw
+        
 
         self.rabbits = []
         self.foxes = []
@@ -63,27 +73,28 @@ class Simulation():
         self.grass_lock = Lock()
 
     def run(self):
-        grasses = Grasses(WIDTH, HEIGHT, self.grassimg, self.clock_speed/4, self.life_speed_up)
+        grasses = Grasses(WIDTH, HEIGHT, self.grassimg, self.clock_speed/5, self.life_speed_up) #self.clock_speed/4
         Thread(target = grasses.live, args = ()).start()
 
         # Create animals
         for i in range(RABBIT_NUMBER):
             x = random.randrange(RABBIT_SIZE, WIDTH - RABBIT_SIZE)
             y = random.randrange(RABBIT_SIZE, HEIGHT - RABBIT_SIZE)
-            rabbit = Rabbit(x, y, WIDTH, HEIGHT, self.rabbitimg, RABBIT_SPEED, self.life_speed_up)
+            rabbit = Rabbit(x, y, WIDTH, HEIGHT, self.rabbitimg, self.params["rabbit_speed"] , self.life_speed_up, self.params["rabbit_children"])
             self.rabbits.append(rabbit)
-            Thread(target = rabbit.live, args = (grasses.grass_list, self.foxes, self.rabbits, self.rabbit_lock, self.grass_lock, self.clock_speed)).start()
+            Thread(target = rabbit.live, args = (grasses.grass_list, self.foxes, self.rabbits, self.rabbit_lock, self.grass_lock, self.clock_speed, self.drawing)).start()
 
         for i in range(FOX_NUMBER):
             x = random.randrange(FOX_SIZE, WIDTH - FOX_SIZE)
             y = random.randrange(FOX_SIZE, HEIGHT - FOX_SIZE)
-            fox = Fox(x, y, WIDTH, HEIGHT, self.foximg, FOX_SPEED, self.life_speed_up)
+            fox = Fox(x, y, WIDTH, HEIGHT, self.foximg, self.params["fox_speed"] , self.life_speed_up, self.params["fox_children"])
             self.foxes.append(fox)
-            Thread(target = fox.live, args = (self.foxes, self.rabbits, self.fox_lock, self.clock_speed)).start()
+            Thread(target = fox.live, args = (self.foxes, self.rabbits, self.fox_lock, self.clock_speed, self.drawing)).start()
 
         # Set up game loop
         running = True
-        clock = pygame.time.Clock()
+        if self.drawing:
+            clock = pygame.time.Clock()
         sim_pressed = False
 
         while running:
@@ -91,9 +102,10 @@ class Simulation():
 
             # Handle events
             if (self.drawing == False):
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        running = False
+                pass
+                #for event in pygame.event.get():
+                    #if event.type == pygame.QUIT:
+                        #running = False
             else:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
@@ -123,7 +135,7 @@ class Simulation():
                     prev_mouse_x = mouse_x
                     prev_mouse_y = mouse_y
 
-            if (self.drawing):
+            if self.drawing:
                 self.simulation.fill(LIGHTGRAY)
                 pygame.draw.rect(self.simulation, DARKGREEN, pygame.Rect(int(self.offsetx * self.scale), int(self.offsety * self.scale), int(WIDTH * self.scale), int(HEIGHT * self.scale)))
 
@@ -150,7 +162,13 @@ class Simulation():
 
                 pygame.display.flip()
 
-            clock.tick(self.clock_speed)
+            if self.drawing:
+                clock.tick(self.clock_speed)
+            else:
+                time.sleep(1/self.clock_speed)
+
+            #print time since last tick
+            print(len(self.rabbits))
 
             #end criteria)
             if (len(self.rabbits) == 0 or len(self.foxes) == 0):
@@ -162,6 +180,7 @@ class Simulation():
         for fox in self.foxes:
             fox.done = True
 
-        pygame.quit()
+        if self.drawing:
+            pygame.quit()
 
         return self.ticks_lived

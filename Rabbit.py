@@ -1,6 +1,7 @@
 import random
 import math
 from time import sleep
+import time
 import pygame
 from threading import Thread
 
@@ -9,7 +10,7 @@ RABBIT_NUMBER = 50
 RABBIT_RADIUS = RABBIT_SIZE * 10
 
 class Rabbit:
-    def __init__(self, x, y, map_width, map_height, color, speed, life_speed_up = 1):
+    def __init__(self, x, y, map_width, map_height, color, speed, life_speed_up = 1, children_count = 1, drawing = True):
         self.x = x
         self.y = y
         self.size = RABBIT_SIZE
@@ -18,6 +19,8 @@ class Rabbit:
         self.color = color
         self.eaten = False
         self.done = False
+        self.children_count = children_count
+        self.drawing = drawing
 
         self.life_speed_up = life_speed_up
 
@@ -36,10 +39,11 @@ class Rabbit:
 
     def reproduce(self, nearest_rabbit, rabbits, grass, foxes, rabbit_lock, grass_lock, clock_speed):
         if (self.reproductive_timer <= 0 and nearest_rabbit.reproductive_timer <= 0):
-            new_rabbit = Rabbit(self.x, self.y, self.map_width, self.map_height, self.color, self.speed)
-            new_rabbit.reproductive_timer = new_rabbit.reproductive_cooldown
-            rabbits.append(new_rabbit)
-            Thread(target = new_rabbit.live, args = (grass, foxes, rabbits, rabbit_lock, grass_lock, clock_speed)).start()
+            for _ in range(self.children_count):
+                new_rabbit = Rabbit(self.x, self.y, self.map_width, self.map_height, self.color, self.speed/self.life_speed_up, self.life_speed_up, self.children_count)
+                new_rabbit.reproductive_timer = new_rabbit.reproductive_cooldown
+                rabbits.append(new_rabbit)
+                Thread(target = new_rabbit.live, args = (grass, foxes, rabbits, rabbit_lock, grass_lock, clock_speed, self.drawing)).start()
             nearest_rabbit.reproductive_timer = nearest_rabbit.reproductive_cooldown
             self.reproductive_timer = self.reproductive_cooldown
 
@@ -185,10 +189,16 @@ class Rabbit:
 
         self.handle_collisions(rabbits)
 
-    def live(self, grass, foxes, rabbits, rabbits_lock, grass_lock, clock_speed):
-        clock = pygame.time.Clock()
+    def live(self, grass, foxes, rabbits, rabbits_lock, grass_lock, clock_speed, drawing):
+        self.drawing = drawing
+        if drawing:
+            clock = pygame.time.Clock()
+
         while self.alive() and not self.done:
             self.action(grass, foxes, rabbits, rabbits_lock, grass_lock, clock_speed)
 
-            clock.tick(clock_speed)
+            if drawing:
+                clock.tick(clock_speed)
+            else:
+                time.sleep(1/clock_speed)
 
