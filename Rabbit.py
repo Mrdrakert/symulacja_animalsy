@@ -10,7 +10,7 @@ RABBIT_NUMBER = 50
 RABBIT_RADIUS = RABBIT_SIZE * 10
 
 class Rabbit:
-    def __init__(self, x, y, map_width, map_height, color, speed, life_speed_up = 1, children_count = 1, drawing = True):
+    def __init__(self, x, y, map_width, map_height, color, speed, life_speed_up, children_count, reproductive, life):
         self.x = x
         self.y = y
         self.size = RABBIT_SIZE
@@ -20,29 +20,32 @@ class Rabbit:
         self.eaten = False
         self.done = False
         self.children_count = children_count
-        self.drawing = drawing
+        self.drawing = True
 
         self.life_speed_up = life_speed_up
 
         self.map_width = map_width
         self.map_height = map_height
 
-        self.time_to_live = 500
-        self.max_time_to_live = 500
+        self.time_to_live = life
+        self.max_time_to_live = self.time_to_live
 
         self.saved_direction = (0, 0)
         self.time_going_in_direction = 0
         self.time_to_change_direction = (60, 120)
 
-        self.reproductive_cooldown = 400
+        self.reproductive_cooldown = reproductive
+        self.reproductive_cooldown -= random.randint(0, 100)
         self.reproductive_timer = self.reproductive_cooldown
 
     def reproduce(self, nearest_rabbit, rabbits, grass, foxes, rabbit_lock, grass_lock, clock_speed):
         if (self.reproductive_timer <= 0 and nearest_rabbit.reproductive_timer <= 0):
             for _ in range(self.children_count):
-                new_rabbit = Rabbit(self.x, self.y, self.map_width, self.map_height, self.color, self.speed/self.life_speed_up, self.life_speed_up, self.children_count)
+                new_rabbit = Rabbit(self.x, self.y, self.map_width, self.map_height, self.color, self.speed/self.life_speed_up, self.life_speed_up, self.children_count, self.reproductive_cooldown, self.max_time_to_live)
                 new_rabbit.reproductive_timer = new_rabbit.reproductive_cooldown
-                rabbits.append(new_rabbit)
+                new_rabbit.time_to_live = new_rabbit.max_time_to_live / 2
+                with rabbit_lock:
+                    rabbits.append(new_rabbit)
                 Thread(target = new_rabbit.live, args = (grass, foxes, rabbits, rabbit_lock, grass_lock, clock_speed, self.drawing)).start()
             nearest_rabbit.reproductive_timer = nearest_rabbit.reproductive_cooldown
             self.reproductive_timer = self.reproductive_cooldown
@@ -56,7 +59,7 @@ class Rabbit:
             self.time_to_live -= 1 * self.life_speed_up
 
         if self.reproductive_timer > 0:
-            self.reproductive_timer -= 1
+            self.reproductive_timer -= 1 * self.life_speed_up
 
     def get_grass_info(self, grass):
         nearest_grass = None

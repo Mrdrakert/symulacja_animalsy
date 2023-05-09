@@ -9,7 +9,7 @@ FOX_SIZE = 12
 FOX_RADIUS = 60
 
 class Fox:
-    def __init__(self, x, y, map_width, map_height, color, speed, life_speed_up = 1, drawing = True, fox_children = 1):
+    def __init__(self, x, y, map_width, map_height, color, speed, life_speed_up, fox_children, reproductive, life):
         self.x = x
         self.y = y
         self.size = FOX_SIZE
@@ -18,20 +18,20 @@ class Fox:
         self.map_width = map_width
         self.map_height = map_height
         self.done = False
-        self.drawing = drawing
+        self.drawing = True
         self.children_count = fox_children
         self.radius = FOX_RADIUS
 
         self.life_speed_up = life_speed_up
 
-        self.time_to_live = 800
-        self.max_time_to_live = 800
+        self.time_to_live = life
+        self.max_time_to_live = self.time_to_live
 
         self.saved_direction = (0, 0)
         self.time_going_in_direction = 0
         self.time_to_change_direction = (60, 120)
 
-        self.reproductive_cooldown = 400
+        self.reproductive_cooldown = reproductive
         self.reproductive_timer = self.reproductive_cooldown
 
     def pass_time(self, foxes, fox_lock):
@@ -41,6 +41,9 @@ class Fox:
             return
         else:
             self.time_to_live -= 1 * self.life_speed_up
+
+        if self.reproductive_timer > 0:
+            self.reproductive_timer -= 1 * self.life_speed_up
 
     def get_rabbit_info(self, rabbits):
         # Move towards rabbits
@@ -83,7 +86,7 @@ class Fox:
         nearest_distance = 100000
         for f in foxes:
             distance = math.sqrt((self.x - f.x)**2 + (self.y - f.y)**2)
-            if distance < nearest_distance:
+            if distance < nearest_distance and f is not self and f.reproductive_timer <= 0:
                 nearest_distance = distance
                 nearest_fox = f
         return nearest_fox, nearest_distance
@@ -120,19 +123,19 @@ class Fox:
         if self.time_to_live > self.max_time_to_live:
             self.time_to_live = self.max_time_to_live
 
-    def reproduce(self, nearest_fox, rabbits, grass, foxes, rabbit_lock, grass_lock, fox_lock, clock_speed):
+    def reproduce(self, nearest_fox, rabbits, foxes, fox_lock, clock_speed):
         if (self.reproductive_timer <= 0 and nearest_fox.reproductive_timer <= 0):
             for _ in range(self.children_count):
-                new_fox = Fox(self.x, self.y, self.map_width, self.map_height, self.color, self.speed/self.life_speed_up, self.life_speed_up, self.children_count)
+                new_fox = Fox(self.x, self.y, self.map_width, self.map_height, self.color, self.speed/self.life_speed_up, self.life_speed_up, self.children_count, self.reproductive_cooldown, self.max_time_to_live)
                 new_fox.reproductive_timer = new_fox.reproductive_cooldown
                 foxes.append(new_fox)
                 Thread(target = new_fox.live, args = (foxes, rabbits, fox_lock, clock_speed, self.drawing)).start()
                 nearest_fox.reproductive_timer = nearest_fox.reproductive_cooldown
                 self.reproductive_timer = self.reproductive_cooldown
 
-    def find_partner(self, best_fox, best_f_distance, rabbits, grass, foxes, rabbit_lock, grass_lock, fox_lock, clock_speed):
-        if best_f_distance < self.size + best_fox.size + 1:
-                self.reproduce(best_fox, rabbits, grass, foxes, rabbit_lock, grass_lock, fox_lock, clock_speed)
+    def find_partner(self, best_fox, best_f_distance, rabbits, foxes, fox_lock, clock_speed):
+        if best_f_distance < self.size + best_fox.size + 5:
+                self.reproduce(best_fox, rabbits, foxes, fox_lock, clock_speed)
         else:
             self.x += (best_fox.x - self.x) * self.speed / best_f_distance
             self.y += (best_fox.y - self.y) * self.speed / best_f_distance
@@ -150,16 +153,17 @@ class Fox:
         else:
             return True
 
-    def action(self, rabbits, foxes, fox_lock):
+    def action(self, rabbits, foxes, fox_lock, clock_speed):
+
+        #print(self.reproductive_timer)
         self.pass_time(foxes, fox_lock)
         
         best_rabbit, best_r_distance = self.get_rabbit_info(rabbits)
         best_fox, best_f_distance = self.get_fox_info(foxes)
 
-        #if best_fox is not None and best_f_distance < self.radius and self.reproductive_timer <= 0:
-            #self.find_partner(best_fox, best_f_distance, rabbits, foxes, fox_lock)
-        #el
-        if best_rabbit is not None and self.time_to_live < self.max_time_to_live * 0.9:
+        if best_fox is not None and best_f_distance < self.radius and self.reproductive_timer <= 0:
+            self.find_partner(best_fox, best_f_distance, rabbits, foxes, fox_lock, clock_speed)
+        elif best_rabbit is not None and self.time_to_live < self.max_time_to_live * 0.9:
             self.hunt_rabbit(best_rabbit, best_r_distance)
         else:
             self.go_randomly()
@@ -175,7 +179,7 @@ class Fox:
         if drawing:
             clock = pygame.time.Clock()
         while self.alive() and not self.done:
-            self.action(rabbits, foxes, fox_lock)
+            self.action(rabbits, foxes, fox_lock, clock_speed)
 
             if drawing:
                 clock.tick(clock_speed)

@@ -21,15 +21,15 @@ LIGHTGRAY = (198, 198, 198)
 RABBIT_SIZE = 8
 FOX_SIZE = 12
 
-RABBIT_NUMBER = 50
-FOX_NUMBER = 10
+RABBIT_NUMBER = 70
+FOX_NUMBER = 5
 GRASS_NUMBER = 100
 
 RABBIT_SPEED = 0.9
 FOX_SPEED = 1.1
 
 class Simulation():
-    def __init__(self, clock_speed = 60, life_speed_up = 1, draw = True, params = {"rabbit_speed": RABBIT_SPEED,"fox_speed": FOX_SPEED,"rabbit_children": 3, "fox_children": 1}):
+    def __init__(self, clock_speed = 60, life_speed_up = 1, draw = True, params = {}):
         self.params = params
         self.life_speed_up = life_speed_up
         self.ticks_lived = 0
@@ -73,21 +73,21 @@ class Simulation():
         self.grass_lock = Lock()
 
     def run(self):
-        grasses = Grasses(WIDTH, HEIGHT, self.grassimg, self.clock_speed/5, self.life_speed_up) #self.clock_speed/4
+        grasses = Grasses(WIDTH, HEIGHT, self.grassimg, self.clock_speed/3, self.life_speed_up) #self.clock_speed/4
         Thread(target = grasses.live, args = ()).start()
 
         # Create animals
         for i in range(RABBIT_NUMBER):
             x = random.randrange(RABBIT_SIZE, WIDTH - RABBIT_SIZE)
             y = random.randrange(RABBIT_SIZE, HEIGHT - RABBIT_SIZE)
-            rabbit = Rabbit(x, y, WIDTH, HEIGHT, self.rabbitimg, self.params["rabbit_speed"] , self.life_speed_up, self.params["rabbit_children"])
+            rabbit = Rabbit(x, y, WIDTH, HEIGHT, self.rabbitimg, self.params["rabbit_speed"] , self.life_speed_up, self.params["rabbit_children"], self.params["rabbit_reproductive"], self.params["rabbit_life"])
             self.rabbits.append(rabbit)
             Thread(target = rabbit.live, args = (grasses.grass_list, self.foxes, self.rabbits, self.rabbit_lock, self.grass_lock, self.clock_speed, self.drawing)).start()
 
         for i in range(FOX_NUMBER):
             x = random.randrange(FOX_SIZE, WIDTH - FOX_SIZE)
             y = random.randrange(FOX_SIZE, HEIGHT - FOX_SIZE)
-            fox = Fox(x, y, WIDTH, HEIGHT, self.foximg, self.params["fox_speed"] , self.life_speed_up, self.params["fox_children"])
+            fox = Fox(x, y, WIDTH, HEIGHT, self.foximg, self.params["fox_speed"] , self.life_speed_up, self.params["fox_children"], self.params["fox_reproductive"], self.params["fox_life"])
             self.foxes.append(fox)
             Thread(target = fox.live, args = (self.foxes, self.rabbits, self.fox_lock, self.clock_speed, self.drawing)).start()
 
@@ -171,7 +171,8 @@ class Simulation():
             print(len(self.rabbits))
 
             #end criteria)
-            if (len(self.rabbits) == 0 or len(self.foxes) == 0):
+            #print(len(self.rabbits) + len(self.foxes))
+            if (len(self.rabbits) == 0 or len(self.foxes) == 0 or len(self.rabbits) + len(self.foxes) > 150):
                 running = False
 
         grasses.done = True
